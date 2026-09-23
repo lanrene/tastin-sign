@@ -225,13 +225,11 @@ def api_request(method: str, path: str, body: dict | None = None) -> dict:
 # ============ 通知 ============
 def send_message(subject: str, body_html: str):
     """发送邮件通知（未配置 SMTP 时静默跳过）"""
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        return
-    send_email(subject, body_html)
+    if SMTP_HOST and SMTP_USER and SMTP_PASS:
+        send_email(subject, body_html)
         
-    if not PUSHPLUS_TOKEN:
-        return
-    send_pushplus(subject, body_html)
+    if PUSHPLUS_TOKEN:
+        send_pushplus(subject, body_html)
 
 # ============ 邮件通知 ============
 def send_email(subject: str, body_html: str):
