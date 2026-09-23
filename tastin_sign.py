@@ -227,16 +227,15 @@ def send_message(subject: str, body_html: str):
     """发送邮件通知（未配置 SMTP 时静默跳过）"""
     if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
         return
-    else:
-        send_email(subject, body_html)
+    send_email(subject, body_html)
         
     if not PUSHPLUS_TOKEN:
         return
-    else:
-        send_pushplus(subject, body_html)
+    send_pushplus(subject, body_html)
 
 # ============ 邮件通知 ============
 def send_email(subject: str, body_html: str):
+    print(f"开始发送邮件: {subject}")
     to_addr = SMTP_TO or SMTP_USER
     try:
         import smtplib
@@ -266,12 +265,14 @@ def send_email(subject: str, body_html: str):
 
 # ============ pushplus通知 ============
 def send_pushplus(title: str, content: str):
+    print(f"开始 pushplus 推送: {title}")
     push_url = "https://www.pushplus.plus/send"
     payload = {
         "token": PUSHPLUS_TOKEN,
         "title": title,
         "content": content,
-        "template": "html"
+        "template": "html",
+        "channel": "wechat"
     }
     try:
         data = json.dumps(payload).encode("utf-8")
