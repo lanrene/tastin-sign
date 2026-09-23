@@ -51,4 +51,5 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_TO: ${{ secrets.SMTP_TO }}
           SMTP_NOTIFY_SIGN: ${{ secrets.SMTP_NOTIFY_SIGN || '' }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN || '' }}
         run: python tastin_sign.py
