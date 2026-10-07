@@ -223,13 +223,13 @@ def api_request(method: str, path: str, body: dict | None = None) -> dict:
     return result
 
 # ============ 通知 ============
-def send_message(subject: str, body_html: str):
+def send_message(subject: str, body_html: str, pushplus_channel: str = "wechat"):
     """发送邮件通知（未配置 SMTP 时静默跳过）"""
     if SMTP_HOST and SMTP_USER and SMTP_PASS:
         send_email(subject, body_html)
         
     if PUSHPLUS_TOKEN:
-        send_pushplus(subject, body_html)
+        send_pushplus(subject, body_html, pushplus_channel)
 
 # ============ 邮件通知 ============
 def send_email(subject: str, body_html: str):
@@ -262,7 +262,7 @@ def send_email(subject: str, body_html: str):
         print(f"[notify] 邮件发送失败: {e}")
 
 # ============ pushplus通知 ============
-def send_pushplus(title: str, content: str):
+def send_pushplus(title: str, content: str, channel: str = "wechat"):
     print(f"开始 pushplus 推送: {title}")
     push_url = "https://www.pushplus.plus/send"
     payload = {
@@ -270,7 +270,7 @@ def send_pushplus(title: str, content: str):
         "title": title,
         "content": content,
         "template": "html",
-        "channel": "wechat"
+        "channel": channel
     }
     try:
         data = json.dumps(payload).encode("utf-8")
@@ -364,19 +364,19 @@ def do_sign(activity_id: int) -> dict:
 def format_reward(result: dict) -> str:
     """格式化奖励信息"""
     lines = []
-    lines.append(f"连续签到: {result.get('continuousNum', '?')} 天")
+    lines.append(f"<p>连续签到: {result.get('continuousNum', '?')} 天</p>")
     for reward in result.get("rewardInfoList") or []:
-        lines.append(f"  奖励: {reward.get('rewardName', '未知')}")
+        lines.append(f"<h4>奖励: {reward.get('rewardName', '未知')}</h4>")
         for coupon in reward.get("couponInfo") or []:
-            lines.append(f"    - {coupon.get('name')} ({coupon.get('couponContent')}, {coupon.get('couponTime')})")
+            lines.append(f"<p> - {coupon.get('name')} ({coupon.get('couponContent')}, {coupon.get('couponTime')})</p>")
         if reward.get("point", 0) > 0:
-            lines.append(f"    - 积分 +{reward['point']}")
-    return "\n".join(lines)
+            lines.append(f"<p> - 积分 +{reward['point']}</p>")
+    return "<br>".join(lines)
 
 
 # ============ 主流程 ============
-def run_sign_once() -> tuple[str, str]:
-    """执行一次完整签到尝试。返回 (status, sign_msg)：
+def run_sign_once() -> tuple[str, str, str|None]:
+    """执行一次完整签到尝试。返回 (status, sign_msg, continuous_num)：
       "ok"      - 签到成功或今天已签
       "expired" - token 已失效（重试无意义，应立即人工处理）
       "network" - 网络/代理故障（可重试）
@@ -386,7 +386,6 @@ def run_sign_once() -> tuple[str, str]:
     _working_proxies.clear()
 
     # 验证 token
-    print()
     token_status = check_token()
     if token_status == "network":
         return "network", "网络/代理故障，无法连接服务器"
@@ -394,11 +393,9 @@ def run_sign_once() -> tuple[str, str]:
         return "expired", "token 已失效"
 
     # 自动发现当前签到活动 ID
-    print()
     activity_id = discover_activity_id()
 
     # 查询签到状态
-    print()
     info = get_sign_info(activity_id)
     if info:
         act = info.get("activityInfo", {})
@@ -406,12 +403,11 @@ def run_sign_once() -> tuple[str, str]:
         print(f"[info] 每日签到: {'开启' if act.get('daySignOpen') else '关闭'}")
 
     # 执行签到
-    print()
     res = do_sign(activity_id)
     if res.get("code") == 200 and res.get("result"):
         print("[sign] 签到成功!")
-        print(format_reward(res["result"]))
-        sign_msg = f"签到成功！连续 {res['result'].get('continuousNum', '?')} 天"
+        sign_msg = format_reward(res["result"])
+        print(sign_msg)
     elif res.get("msg") and ("签过" in res["msg"] or "已签" in res["msg"]):
         print(f"[sign] 今天已经签过了: {res['msg']}")
         sign_msg = "今天已经签过了"
@@ -424,23 +420,20 @@ def run_sign_once() -> tuple[str, str]:
         return "failed", sign_msg
 
     # 最终积分
-    print()
     final = api_request("POST", "/api/wx/point/myPoint", {})
     if final.get("code") == 200 and final.get("result"):
-        print(f"[done] 当前积分: {final['result'].get('point', '?')}")
+        final_point = final['result'].get('point', '?')
+        print(f"[done] 当前积分: {final_point}")
+        sign_msg += f"<br><p>当前积分: {final_point}</p>"
     print("\n[done] 签到流程完成")
-    return "ok", sign_msg
+    return "ok", sign_msg, res['result'].get('continuousNum', '')
 
 
 def main():
-    print()
     print("===================================================================")
     print(f"🍔 塔斯汀每日自动签到")
-    print(f"👨‍💻 Author: LeapYa")
-    print(f"🔗 GitHub: https://github.com/LeapYa/tastin-sign")
     print(f"⏰ {_now().strftime('%Y-%m-%d %H:%M:%S')} (Asia/Shanghai)")
     print("===================================================================")
-    print()
 
     # 0. 检查配置
     if not USER_TOKEN or not MEMBER_PHONE:
@@ -454,14 +447,14 @@ def main():
     last_status, last_msg = "network", ""
     for attempt in range(1, _MAX_RETRIES + 1):
         print(f"\n========== 第 {attempt}/{_MAX_RETRIES} 次尝试 ==========")
-        last_status, last_msg = run_sign_once()
+        last_status, last_msg, continuous_num = run_sign_once()
 
         if last_status == "ok":
             if SMTP_NOTIFY_SIGN:
                 send_message(
                     "✅ 塔斯汀签到成功",
-                    f"<h3>塔斯汀每日签到</h3><p><b>{last_msg}</b></p>"
-                    f"<p><small>时间: {_now().strftime('%Y-%m-%d %H:%M:%S')}</small></p>",
+                    f"<p>{last_msg}</p>",
+                    continuous_num == "7" and "cmcc" or "wechat"
                 )
             return  # 正常退出（exit 0）
 
@@ -471,11 +464,8 @@ def main():
             print("::error::塔斯汀 token 已过期，需要手动更新！")
             send_message(
                 "⚠️ 塔斯汀签到 Token 已过期",
-                "<h3>塔斯汀签到 Token 已失效</h3>"
-                "<p>请重新运行 <code>get_token.py</code> 获取新 token，"
-                "然后更新 GitHub 仓库的 Secrets：</p>"
-                "<ul><li>TASTIN_USER_TOKEN</li><li>TASTIN_MEMBER_PHONE</li></ul>"
-                f"<p><small>时间: {_now().strftime('%Y-%m-%d %H:%M:%S')}</small></p>",
+                "<p>Token 已过期，需要更新 TASTIN_USER_TOKEN 和 TASTIN_MEMBER_PHONE</p>",
+                "cmcc"
             )
             sys.exit(1)
 
@@ -494,9 +484,8 @@ def main():
     if SMTP_NOTIFY_SIGN:
         send_message(
             "❌ 塔斯汀签到失败",
-            f"<h3>塔斯汀签到失败</h3><p>已重试 {_MAX_RETRIES} 次仍未成功</p>"
-            f"<p>最后错误: {last_msg}</p>"
-            f"<p><small>时间: {_now().strftime('%Y-%m-%d %H:%M:%S')}</small></p>",
+            f"<p>已重试 {_MAX_RETRIES} 次仍未成功，错误信息：</p></br><p>{last_msg}</p>",
+            "cmcc"
         )
     sys.exit(1)
 
