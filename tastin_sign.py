@@ -366,12 +366,12 @@ def format_reward(result: dict) -> str:
     lines = []
     lines.append(f"<p>连续签到: {result.get('continuousNum', '?')} 天</p>")
     for reward in result.get("rewardInfoList") or []:
-        lines.append(f"<h4>奖励: {reward.get('rewardName', '未知')}</h4>")
+        lines.append(f"<h5>奖励: {reward.get('rewardName', '未知')}</h5>")
         for coupon in reward.get("couponInfo") or []:
             lines.append(f"<p> - {coupon.get('name')} ({coupon.get('couponContent')}, {coupon.get('couponTime')})</p>")
         if reward.get("point", 0) > 0:
             lines.append(f"<p> - 积分 +{reward['point']}</p>")
-    return "<br>".join(lines)
+    return "".join(lines)
 
 
 # ============ 主流程 ============
@@ -424,7 +424,7 @@ def run_sign_once() -> tuple[str, str, str|None]:
     if final.get("code") == 200 and final.get("result"):
         final_point = final['result'].get('point', '?')
         print(f"[done] 当前积分: {final_point}")
-        sign_msg += f"<br><p>当前积分: {final_point}</p>"
+        sign_msg += f"<p>当前积分: {final_point}</p>"
     print("\n[done] 签到流程完成")
     return "ok", sign_msg, res['result'].get('continuousNum', '')
 
